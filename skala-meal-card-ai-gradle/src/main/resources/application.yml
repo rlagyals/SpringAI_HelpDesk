@@ -1,0 +1,47 @@
+spring:
+  application:
+    name: meal-card-ai
+
+  ai:
+    openai:
+      api-key: ${OPENAI_API_KEY}
+      chat:
+        options:
+          model: gpt-4o-mini
+          temperature: 0.2
+      embedding:
+        options:
+          model: text-embedding-3-small
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
+
+meal-card:
+  rag:
+    top-k: 5
+    threshold: 0.0
+  memory:
+    max-messages: 20
+  chunk:
+    max-chars: 700
+    min-chars: 100
+
+server:
+  port: 8080
+
+logging:
+  level:
+    com.skala.mealcard: INFO
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    display-request-duration: true
+  api-docs:
+    path: /v3/api-docs
