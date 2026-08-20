@@ -105,11 +105,6 @@ src/main/resources/policies/
 └── meal-request-approval-policy.md
 ```
 
-## Docker를 안 쓰는 이유
-
-이 프로젝트는 외부 PostgreSQL/pgvector 같은 DB를 사용하지 않는다.
-따라서 Docker Desktop이나 `docker compose up`이 필요 없다.
-
 ## 참고: 부서장 승인 규정
 
 원 규정에는 팀 잔여 예산을 초과하면 부서장 승인이 추가로 필요하다.
