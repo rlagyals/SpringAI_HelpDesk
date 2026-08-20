@@ -1,4 +1,4 @@
-# SKALA 법인카드 회식 AI — Gradle + Swagger
+# SKALA 법인카드 회식 매니저
 
 이번 종합실습용 프로젝트는 **Gradle(build.gradle)** 기반이며, API 검증은 **Swagger UI**에서 할 수 있게 구성했다.
 Docker는 사용하지 않는다. RAG는 `SimpleVectorStore`, 메모리/팀/신청 데이터는 인메모리 저장소를 사용한다.
