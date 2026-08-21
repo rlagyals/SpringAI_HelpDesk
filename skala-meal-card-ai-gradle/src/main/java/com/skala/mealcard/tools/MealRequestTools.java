@@ -22,15 +22,18 @@ public class MealRequestTools {
         this.service = service;
     }
 
-
     @Tool(description = """
-        법인카드 회식을 위해 사전 신청을 생성한다.
-        AI는 신청만 생성하며 승인하지 않는다.
-        회식 예정일, 참석 인원 수, 회식 유형, 회식 사유가 반드시 필요하다.
-        예상 사용 금액은 참석 인원 수와 회식 유형별 1인당 한도를 기준으로 서버에서 자동 계산한다.
-        사용자에게 예상 사용 금액을 직접 입력하도록 요구하지 않는다.
-        필수 정보가 없으면 임의로 추측하지 말고 사용자에게 다시 요청한다.
-        """)
+            법인카드 회식을 위한 사전 신청을 생성한다.
+            AI는 신청만 생성하며 승인하지 않는다.
+
+            회식 예정일, 참석 인원 수, 회식 유형, 회식 사유,
+            심야 예정 여부, 주류 예정 여부가 필요하다.
+
+            예상 사용 금액은 사용자가 입력하지 않으며
+            서버에서 참석 인원 수와 회식 유형별 한도를 이용해 자동 계산한다.
+
+            필요한 정보가 부족하면 임의로 추측하여 Tool을 호출하지 않는다.
+            """)
     public Map<String, Object> createMealRequest(
             @ToolParam(description = "회식 예정일. YYYY-MM-DD 형식")
             String mealDate,
@@ -50,12 +53,13 @@ public class MealRequestTools {
             @ToolParam(description = "주류 포함 예정 여부")
             boolean alcoholPlanned,
 
-            @ToolParam(description = "심야 또는 주류 예정 시 사유. 해당 없으면 빈 문자열")
+            @ToolParam(description = "심야 또는 주류 예정 시 관련 사유. 해당 없으면 빈 문자열")
             String specialReason,
 
             ToolContext context) {
 
         try {
+
             String userId =
                     String.valueOf(context.getContext().get("userId"));
 
@@ -76,50 +80,114 @@ public class MealRequestTools {
             return toMap(created);
         }
         catch (Exception e) {
+
             return Map.of(
-                    "error",
-                    e.getMessage()
+                    "success", false,
+                    "errorCode", normalizeCreateError(e)
             );
         }
     }
 
+
     @Tool(description = """
-            회식 사전 신청의 상태와 승인번호를 조회한다.
-            반드시 사용자가 제공한 실제 접수번호(requestId)가 있어야 호출한다.
-            접수번호가 없으면 이 도구를 호출하지 마세요.
-            최근 신청을 임의로 조회하지 마세요.
-            대화 내용만 보고 신청 상태를 추측하지 마세요.
-            PENDING_MANAGER_APPROVAL, APPROVED 등의 상태는
-            실제 접수번호로 조회된 결과가 있을 때만 답한다.
+            사용자가 제공한 접수번호로 회식 신청의 실제 상태와 승인번호를 조회한다.
+
+            상태를 추측해서는 안 되며 반드시 이 Tool의 실제 결과를 사용한다.
+
+            접수번호가 제공되지 않았다면 Tool을 호출하지 않는다.
+
+            사용자가 MR-로 시작하는 값을 제공했다면
+            길이나 형식만 보고 유효하지 않다고 판단하지 말고
+            실제 존재 여부를 확인하기 위해 그 값을 그대로 조회한다.
+
+            다른 팀의 신청 정보는 제공하지 않는다.
             """)
     public Map<String, Object> getMealRequestStatus(
-            @ToolParam(description = "회식 신청 접수번호. 예: MR-1234ABCD")
+            @ToolParam(description = """
+                    사용자가 입력한 회식 신청 접수번호.
+                    MR-로 시작하는 값이 있으면 형식이 완벽하지 않아도
+                    실제 존재 여부를 확인하기 위해 그대로 전달한다.
+                    예: MR-1234ABCD
+                    """)
             String requestId,
+
             ToolContext context) {
 
         try {
+
             String userId =
                     String.valueOf(context.getContext().get("userId"));
 
             if (requestId == null || requestId.isBlank()) {
                 return Map.of(
-                        "error",
-                        "회식 신청 상태를 조회하려면 접수번호가 필요합니다. 접수번호(MR-...)를 알려주세요."
+                        "success", false,
+                        "errorCode", "REQUEST_ID_REQUIRED"
                 );
             }
 
             MealRequest request =
                     service.getRequestStatus(requestId, userId);
 
-            return toMap(request);
+            Map<String, Object> result = toMap(request);
+            result.put("success", true);
+
+            return result;
+        }
+        catch (IllegalArgumentException e) {
+
+            return Map.of(
+                    "success", false,
+                    "errorCode", e.getMessage()
+            );
+        }
+        catch (IllegalStateException e) {
+
+            return Map.of(
+                    "success", false,
+                    "errorCode", e.getMessage()
+            );
         }
         catch (Exception e) {
+
             return Map.of(
-                    "error",
-                    e.getMessage()
+                    "success", false,
+                    "errorCode", "STATUS_LOOKUP_FAILED"
             );
         }
     }
+
+
+    private String normalizeCreateError(Exception e) {
+
+        String message = e.getMessage();
+
+        if (message == null) {
+            return "MEAL_REQUEST_CREATE_FAILED";
+        }
+
+        if (message.contains("회식 예정일")) {
+            return "MEAL_DATE_REQUIRED";
+        }
+
+        if (message.contains("참석 인원")) {
+            return "ATTENDEE_COUNT_INVALID";
+        }
+
+        if (message.contains("회식 사유")) {
+            return "REASON_REQUIRED";
+        }
+
+        if (message.contains("심야") || message.contains("주류")) {
+            return "SPECIAL_REASON_REQUIRED";
+        }
+
+        if (message.contains("권한")) {
+            return "CREATE_ACCESS_DENIED";
+        }
+
+        return "MEAL_REQUEST_CREATE_FAILED";
+    }
+
 
     private Map<String, Object> toMap(MealRequest request) {
 
@@ -184,5 +252,5 @@ public class MealRequestTools {
         );
 
         return result;
-    }
+}
 }
