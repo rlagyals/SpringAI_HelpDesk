@@ -23,8 +23,43 @@ public class MealRequestTools {
     }
 
     @Tool(description = """
-            법인카드 회식을 위한 사전 신청을 생성한다.
+            법인카드 회식을 위한 사전 신청을 즉시 접수하고 접수번호(MR-...)를 발급한다.
             AI는 신청만 생성하며 승인하지 않는다.
+
+            사용자가 회식 신청 의사를 밝히면 세부 항목을 먼저 캐묻지 않고 바로 호출한다.
+            세부 항목(회식 예정일, 참석 인원 수, 회식 유형, 회식 사유,
+            심야·주류 예정 여부)은 이 Tool의 인자가 아니며,
+            접수 이후 submitMealRequestDetails Tool로 별도 제출한다.
+
+            반환된 requestId는 사전 신청서 제출과 상태 조회에 사용되는
+            접수번호이므로 반드시 사용자에게 그대로 안내한다.
+            """)
+    public Map<String, Object> createMealRequest(
+            ToolContext context) {
+
+        try {
+
+            String userId =
+                    String.valueOf(context.getContext().get("userId"));
+
+            MealRequest created = service.startRequest(userId);
+
+            return toMap(created);
+        }
+        catch (Exception e) {
+
+            return Map.of(
+                    "success", false,
+                    "errorCode", normalizeCreateError(e)
+            );
+        }
+    }
+
+    @Tool(description = """
+            이미 접수번호가 발급된 회식 신청에 사전 신청서(세부 항목)를 제출한다.
+
+            createMealRequest로 발급받은 실제 접수번호(requestId)가 있을 때만 호출하며,
+            접수번호를 임의로 만들어내지 않는다.
 
             회식 예정일, 참석 인원 수, 회식 유형, 회식 사유,
             심야 예정 여부, 주류 예정 여부가 필요하다.
@@ -34,7 +69,10 @@ public class MealRequestTools {
 
             필요한 정보가 부족하면 임의로 추측하여 Tool을 호출하지 않는다.
             """)
-    public Map<String, Object> createMealRequest(
+    public Map<String, Object> submitMealRequestDetails(
+            @ToolParam(description = "createMealRequest로 발급된 접수번호. 예: MR-1234ABCD")
+            String requestId,
+
             @ToolParam(description = "회식 예정일. YYYY-MM-DD 형식")
             String mealDate,
 
@@ -66,8 +104,9 @@ public class MealRequestTools {
             MealType type =
                     MealType.valueOf(mealType.trim().toUpperCase());
 
-            MealRequest created = service.createRequest(
+            MealRequest updated = service.submitDetails(
                     userId,
+                    requestId,
                     LocalDate.parse(mealDate),
                     attendeeCount,
                     type,
@@ -77,13 +116,13 @@ public class MealRequestTools {
                     specialReason
             );
 
-            return toMap(created);
+            return toMap(updated);
         }
         catch (Exception e) {
 
             return Map.of(
                     "success", false,
-                    "errorCode", normalizeCreateError(e)
+                    "errorCode", normalizeSubmitError(e)
             );
         }
     }
@@ -189,6 +228,30 @@ public class MealRequestTools {
     }
 
 
+    private String normalizeSubmitError(Exception e) {
+
+        String message = e.getMessage();
+
+        if (message == null) {
+            return "MEAL_REQUEST_SUBMIT_FAILED";
+        }
+
+        if (message.equals("MEAL_REQUEST_NOT_FOUND")
+                || message.equals("REQUEST_OWNER_MISMATCH")
+                || message.equals("DETAILS_ALREADY_SUBMITTED")) {
+            return message;
+        }
+
+        String fieldError = normalizeCreateError(e);
+
+        if (!fieldError.equals("MEAL_REQUEST_CREATE_FAILED")) {
+            return fieldError;
+        }
+
+        return "MEAL_REQUEST_SUBMIT_FAILED";
+    }
+
+
     private Map<String, Object> toMap(MealRequest request) {
 
         Map<String, Object> result =
@@ -206,7 +269,7 @@ public class MealRequestTools {
 
         result.put(
                 "mealDate",
-                request.mealDate().toString()
+                request.mealDate() == null ? "" : request.mealDate().toString()
         );
 
         result.put(
@@ -216,12 +279,12 @@ public class MealRequestTools {
 
         result.put(
                 "mealType",
-                request.mealType().name()
+                request.mealType() == null ? "" : request.mealType().name()
         );
 
         result.put(
                 "mealTypeLabel",
-                request.mealType().label()
+                request.mealType() == null ? "" : request.mealType().label()
         );
 
         result.put(

@@ -1,6 +1,7 @@
 package com.skala.mealcard.domain;
 
 public enum RequestStatus {
+    PENDING_DETAILS,
     PENDING_MANAGER_APPROVAL,
     APPROVED,
     REJECTED,

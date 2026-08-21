@@ -56,6 +56,23 @@ public class MealRequestService {
                 boolean alcoholPlanned,
                 String specialReason) {
 
+                MealRequest draft = startRequest(userId);
+
+                return submitDetails(
+                        userId,
+                        draft.requestId(),
+                        mealDate,
+                        attendeeCount,
+                        mealType,
+                        reason,
+                        lateNightPlanned,
+                        alcoholPlanned,
+                        specialReason
+                );
+        }
+
+        public MealRequest startRequest(String userId) {
+
                 UserAccount user = requireUser(userId);
                 Team team = requireUserTeam(userId);
 
@@ -63,6 +80,88 @@ public class MealRequestService {
                         && user.role() != UserRole.MANAGER) {
                 throw new IllegalStateException("회식 신청 권한이 없습니다.");
                 }
+
+                String requestId =
+                        "MR-" + UUID.randomUUID()
+                                .toString()
+                                .substring(0, 8)
+                                .toUpperCase();
+
+                MealRequest request = new MealRequest(
+                        requestId,
+                        team.teamId(),
+                        user.userId(),
+                        null,
+                        0,
+                        null,
+                        null,
+                        0,
+                        false,
+                        false,
+                        "",
+                        RequestStatus.PENDING_DETAILS,
+                        null,
+                        LocalDateTime.now(),
+                        null
+                );
+
+                return requests.save(request);
+        }
+
+        public MealRequest submitDetails(
+                String userId,
+                String requestId,
+                LocalDate mealDate,
+                int attendeeCount,
+                MealType mealType,
+                String reason,
+                boolean lateNightPlanned,
+                boolean alcoholPlanned,
+                String specialReason) {
+
+                MealRequest request = requests.findById(requestId)
+                        .orElseThrow(() ->
+                                new IllegalArgumentException("MEAL_REQUEST_NOT_FOUND"));
+
+                if (!request.applicantUserId().equals(userId)) {
+                throw new IllegalStateException("REQUEST_OWNER_MISMATCH");
+                }
+
+                if (request.status() != RequestStatus.PENDING_DETAILS) {
+                throw new IllegalStateException("DETAILS_ALREADY_SUBMITTED");
+                }
+
+                validateDetails(
+                        mealDate, attendeeCount, mealType, reason,
+                        lateNightPlanned, alcoholPlanned, specialReason
+                );
+
+                int expectedAmount =
+                        attendeeCount * mealType.perPersonLimit();
+
+                MealRequest updated = request.withDetails(
+                        mealDate,
+                        attendeeCount,
+                        mealType,
+                        reason,
+                        expectedAmount,
+                        lateNightPlanned,
+                        alcoholPlanned,
+                        specialReason == null ? "" : specialReason,
+                        RequestStatus.PENDING_MANAGER_APPROVAL
+                );
+
+                return requests.save(updated);
+        }
+
+        private void validateDetails(
+                LocalDate mealDate,
+                int attendeeCount,
+                MealType mealType,
+                String reason,
+                boolean lateNightPlanned,
+                boolean alcoholPlanned,
+                String specialReason) {
 
                 if (mealDate == null) {
                 throw new IllegalArgumentException("회식 예정일은 필수입니다.");
@@ -86,35 +185,6 @@ public class MealRequestService {
                 throw new IllegalArgumentException(
                         "심야 또는 주류 예정 시 사유가 필요합니다.");
                 }
-
-                int expectedAmount =
-                        attendeeCount * mealType.perPersonLimit();
-
-                String requestId =
-                        "MR-" + UUID.randomUUID()
-                                .toString()
-                                .substring(0, 8)
-                                .toUpperCase();
-
-                MealRequest request = new MealRequest(
-                        requestId,
-                        team.teamId(),
-                        user.userId(),
-                        mealDate,
-                        attendeeCount,
-                        mealType,
-                        reason,
-                        expectedAmount,
-                        lateNightPlanned,
-                        alcoholPlanned,
-                        specialReason == null ? "" : specialReason,
-                        RequestStatus.PENDING_MANAGER_APPROVAL,
-                        null,
-                        LocalDateTime.now(),
-                        null
-                );
-
-                return requests.save(request);
         }
 
         public MealRequest getRequestStatus(
@@ -158,6 +228,11 @@ public class MealRequestService {
                 if (!request.teamId().equals(manager.teamId())) {
                 throw new IllegalStateException(
                         "다른 팀의 신청은 승인할 수 없습니다.");
+                }
+
+                if (request.status() == RequestStatus.PENDING_DETAILS) {
+                throw new IllegalStateException(
+                        "사전 신청서가 아직 작성되지 않아 승인할 수 없습니다.");
                 }
 
                 if (request.status()
