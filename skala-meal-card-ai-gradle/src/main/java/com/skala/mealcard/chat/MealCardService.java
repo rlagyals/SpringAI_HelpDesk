@@ -63,7 +63,6 @@ public class MealCardService {
         return new AnswerDto(answer, extractSources(response));
     }
 
-    @SuppressWarnings("unchecked")
     private List<SourceDto> extractSources(ChatClientResponse response) {
         Object raw = response.context().get(QuestionAnswerAdvisor.RETRIEVED_DOCUMENTS);
         if (!(raw instanceof List<?> docs)) {
