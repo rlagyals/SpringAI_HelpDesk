@@ -24,6 +24,12 @@ public class MealRequestRepository {
         return Optional.ofNullable(requests.get(requestId));
     }
 
+    public List<MealRequest> findAll() {
+        return requests.values().stream()
+                .sorted(Comparator.comparing(MealRequest::createdAt).reversed())
+                .toList();
+    }
+
     public List<MealRequest> findByTeamId(String teamId) {
         return requests.values().stream()
                 .filter(r -> r.teamId().equals(teamId))

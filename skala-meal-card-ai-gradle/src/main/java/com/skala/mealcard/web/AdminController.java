@@ -16,15 +16,36 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.skala.mealcard.domain.MealRequest;
+import com.skala.mealcard.repository.MealRequestRepository;
+
 @RestController
 @RequestMapping("/api/admin")
 @Tag(name = "RAG Admin", description = "인제스트된 RAG 청크 품질 확인")
 public class AdminController {
 
     private final VectorStore vectorStore;
+    private final MealRequestRepository mealRequests;
 
-    public AdminController(VectorStore vectorStore) {
+    public AdminController(VectorStore vectorStore, MealRequestRepository mealRequests) {
         this.vectorStore = vectorStore;
+        this.mealRequests = mealRequests;
+    }
+
+    @GetMapping("/meal-requests")
+    @Operation(
+        summary = "메모리에 남아있는 회식 신청(티켓) 전체 조회",
+        description = "X-Role 헤더에 ADMIN을 입력합니다. 서버 재시작 시 초기화되는 인메모리 저장소 기준입니다."
+    )
+    public List<MealRequest> mealRequests(
+            @Parameter(example = "ADMIN")
+            @RequestHeader(name = "X-Role", defaultValue = "") String role) {
+
+        if (!"ADMIN".equalsIgnoreCase(role)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "ADMIN 권한이 필요합니다.");
+        }
+
+        return mealRequests.findAll();
     }
 
     @GetMapping("/chunks")
