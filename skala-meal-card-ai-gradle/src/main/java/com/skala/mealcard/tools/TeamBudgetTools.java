@@ -20,6 +20,8 @@ public class TeamBudgetTools {
 
     @Tool(description = "현재 사용자의 팀 회식비 분기 예산, 사용액, 잔여 예산을 조회한다. 다른 팀 예산 조회에는 사용하지 않는다.")
     public Map<String, Object> getTeamBudget(ToolContext context) {
+        ToolUsageContext.markUsed(context);
+
         String userId = String.valueOf(context.getContext().get("userId"));
         Team team = service.requireUserTeam(userId);
 

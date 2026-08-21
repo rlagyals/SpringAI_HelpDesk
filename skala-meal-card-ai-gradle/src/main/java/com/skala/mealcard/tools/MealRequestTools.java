@@ -37,6 +37,8 @@ public class MealRequestTools {
     public Map<String, Object> createMealRequest(
             ToolContext context) {
 
+        ToolUsageContext.markUsed(context);
+
         try {
 
             String userId =
@@ -96,6 +98,8 @@ public class MealRequestTools {
 
             ToolContext context) {
 
+        ToolUsageContext.markUsed(context);
+
         try {
 
             String userId =
@@ -151,6 +155,8 @@ public class MealRequestTools {
             String requestId,
 
             ToolContext context) {
+
+        ToolUsageContext.markUsed(context);
 
         try {
 

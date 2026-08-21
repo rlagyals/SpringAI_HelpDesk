@@ -1,7 +1,7 @@
 package com.skala.mealcard.web;
 
-import java.io.IOException;
-import java.util.concurrent.CompletableFuture;
+import java.util.List;
+import java.util.Map;
 
 import com.skala.mealcard.chat.MealCardService;
 import com.skala.mealcard.dto.AnswerDto;
@@ -9,11 +9,16 @@ import com.skala.mealcard.dto.AskRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import org.springframework.http.MediaType;
+import org.springframework.http.codec.ServerSentEvent;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+
+import reactor.core.publisher.Flux;
 
 @RestController
 @RequestMapping("/api")
@@ -41,33 +46,25 @@ public AnswerDto chat(
     return service.ask(req);
 }
 
-    @PostMapping(value = "/chat/stream", produces = "text/event-stream")
-    @Operation(summary = "SSE 응답 확인", description = "Phase 6 검증용 SSE API입니다.")
-    public SseEmitter stream(@Valid @RequestBody AskRequest req) {
-        SseEmitter emitter = new SseEmitter(60_000L);
+    @GetMapping("/chat/history")
+    @Operation(
+        summary = "대화 이력 조회",
+        description = "userId와 sessionId로 저장된 대화 이력(memory)을 조회합니다."
+    )
+    public List<Map<String, String>> history(
+            @RequestParam String sessionId,
+            @RequestParam(defaultValue = "member-a1") String userId) {
 
-        CompletableFuture.runAsync(() -> {
-            try {
-                AnswerDto answer = service.ask(req);
+        return service.history(userId, sessionId);
+    }
 
-                for (String token : answer.answer().split("(?<=\\s)")) {
-                    if (!token.isBlank()) {
-                        emitter.send(SseEmitter.event().name("token").data(token));
-                    }
-                }
-
-                emitter.send(SseEmitter.event().name("sources").data(answer.sources()));
-                emitter.send(SseEmitter.event().name("done").data("done"));
-                emitter.complete();
-            }
-            catch (IOException e) {
-                emitter.completeWithError(e);
-            }
-            catch (Exception e) {
-                emitter.completeWithError(e);
-            }
-        });
-
-        return emitter;
+    @PostMapping(value = "/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    @Operation(
+        summary = "AI에게 질문하기 (SSE 스트리밍)",
+        description = "긴 답변의 첫 글자를 빨리 보여주기 위해 토큰 단위로 스트리밍하고, "
+                + "마지막에 출처(sources)를 별도 이벤트로 내보냅니다."
+    )
+    public Flux<ServerSentEvent<String>> stream(@Valid @RequestBody AskRequest req) {
+        return service.stream(req);
     }
 }
